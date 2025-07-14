@@ -1,13 +1,18 @@
-name: Deploy to EKS with Slack Alert
+name: Deploy 2048 Game to EKS with Slack Alerts
 
 on:
   push:
     branches: [main]
 
 jobs:
+  # -------------------------------
+  # SECTION 1: EKS DEPLOYMENT
+  # -------------------------------
   deploy:
+    name: Deploy to EKS
     runs-on: ubuntu-latest
-
+    outputs:
+      status: ${{ steps.set_status.outputs.status }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,16 +34,34 @@ jobs:
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
 
-      - name: Notify Slack - Success
+      - name: Set Deployment Status - Success
         if: success()
+        id: set_status
+        run: echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Set Deployment Status - Failure
+        if: failure()
+        run: echo "status=failure" >> $GITHUB_ENV
+
+  # -------------------------------
+  # SECTION 2: SLACK NOTIFICATION
+  # -------------------------------
+  slack-notify:
+    name: Notify Slack
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()  # ensure this runs no matter what
+    steps:
+      - name: Notify Slack - Success
+        if: needs.deploy.outputs.status == 'success'
         run: |
           curl -X POST -H 'Content-type: application/json' --data "{
-            \"text\": \":white_check_mark: Deployment to EKS succeeded for *2048-game* in namespace *2048-game*.\"
+            \"text\": \":white_check_mark: Deployment to *EKS* succeeded for *2048-game* in namespace *2048-game*.\"
           }" ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Notify Slack - Failure
-        if: failure()
+        if: needs.deploy.outputs.status != 'success'
         run: |
           curl -X POST -H 'Content-type: application/json' --data "{
-            \"text\": \":x: Deployment to EKS *failed* for *2048-game*. Please check the logs.\"
+            \"text\": \":x: Deployment to *EKS* failed for *2048-game*. Please check the logs.\"
           }" ${{ secrets.SLACK_WEBHOOK_URL }}

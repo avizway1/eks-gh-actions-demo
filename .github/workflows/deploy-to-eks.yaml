@@ -37,3 +37,22 @@ jobs:
       - name: Set Deployment Status - Failure
         if: failure()
         run: echo "status=failure" >> $GITHUB_ENV
+  slack-notify:
+    name: Notify Slack
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify Slack - Success
+        if: needs.deploy.outputs.status == 'success'
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"text\": \":white_check_mark: Deployment to *EKS* succeeded for *2048-game* in namespace *2048-game*.\"
+          }" ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Notify Slack - Failure
+        if: needs.deploy.outputs.status == 'failure'
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"text\": \":x: Deployment to *EKS* failed for *2048-game* in namespace *2048-game*. Please check the logs for more details.\"
+          }" ${{ secrets.SLACK_WEBHOOK_URL }}
+          
